@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  // Idempotency: skip if already initialized (e.g., server-side injection
+  // followed by client-side inject-javascript via the Bloks webview component).
+  if (window.playablesSDK) return;
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VazaCut Pro — by GStudio App</title>
+<meta name="theme-color" content="#050507">
+<style>
+:root{
+  --bg:#050507;
+  --surface:#11111A;
+  --surface-2:#0a0a0f;
+  --accent:#7C3AED;
+  --secondary:#22D3EE;
+  --text:#E2E8F0;
+  --muted:#94a3b8;
+  --border:#1e1e2a;
+  --danger:#ef4444;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;
+  -webkit-font-smoothing:antialiased;
+  line-height:1.4;
+}
+.app{max-width:1200px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 20px;background:var(--surface);border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:10;backdrop-filter:blur8px;
+}
+.logo{font-weight:900;font-size:26px;letter-spacing:-.5px;display:flex;align-items:center;gap:10px}
+.logo b{background:linear-gradient(90deg,var(--accent),var(--secondary));-webkit-background-clip:text;background-clip:text;color:transparent}
+.badge{
+  background:linear-gradient(90deg,var(--accent),var(--secondary));
+  color:#050507;font-size:11px;font-weight:700;padding:5px 10px;border-radius:999px;
+}
+.filebar{
+  display:flex;align-items:center;gap:12px;padding:12px 20px;background:var(--surface-2);
+  border-bottom:1px solid var(--border);flex-wrap:wrap;
+}
+.btn-file{
+  background:var(--accent);color:#050507;padding:10px 16px;border-radius:10px;
+  font-weight:700;cursor:pointer;transition:.2s;white-space:nowrap;border:none;
+}
+.btn-file:hover{filter:brightness(1.1);transform:translateY(-1px)}
+#fileName{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%}
+
+.tabs{display:flex;gap:4px;padding:0 12px;background:var(--surface);overflow-x:auto;border-bottom:1px solid var(--border)}
+.tabs button{
+  background:transparent;border:none;color:var(--muted);padding:14px 18px;cursor:pointer;
+  border-bottom:2px solid transparent;font-weight:600;font-size:14px;white-space:nowrap;transition:.2s;
+}
+.tabs button:hover{color:var(--text)}
+.tabs button.active{color:var(--text);border-bottom-color:var(--accent)}
+
+main{flex:1;display:grid;grid-template-columns:1.35fr .85fr;gap:20px;padding:20px}
+@media(max-width:980px){main{grid-template-columns:1fr}}
+
+.preview-wrap{
+  background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:12px;
+  position:relative;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;overflow:hidden;
+  box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.02);
+}
+video{width:100%;height:100%;object-fit:contain;background:#000;border-radius:12px}
+#dropHint{position:absolute;color:#64748b;text-align:center;padding:20px;pointer-events:none;font-size:14px}
+.subtitle-overlay{
+  position:absolute;bottom:8%;left:50%;transform:translateX(-50%);max-width:85%;
+  background:rgba(5,5,7,.82);padding:8px 14px;border-radius:10px;
+  font-size:clamp(14px,2.2vw,20px);font-weight:600;text-align:center;color:var(--text);
+  text-shadow:0 2px 4px rgba(0,0,0,.8);pointer-events:none;display:none;
+  border:1px solid rgba(124,58,237,.35);backdrop-filter:blur(4px);
+}
+
+.panels{background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden;height:fit-content}
+.panel{display:none;padding:20px;animation:fade .25s ease}
+.panel.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.panel h3{margin:0 0 16px;font-size:16px;display:flex;align-items:center;gap:8px}
+
+.input-group{margin-bottom:16px}
+.input-group label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600;letter-spacing:.2px}
+input[type="number"],input[type="text"],textarea{
+  width:100%;background:var(--bg);border:1px solid #222236;color:var(--text);
+  padding:11px 12px;border-radius:10px;font-family:inherit;font-size:14px;transition:.2s;
+}
+input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+textarea{min-height:130px;resize:vertical;line-height:1.5}
+
+.slider-row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.slider-row label{width:80px;font-size:13px;color:var(--muted)}
+.slider-row input[type=range]{flex:1;accent-color:var(--accent);height:4px}
+.slider-row span{width:44px;text-align:right;font-variant-numeric:tabular-nums;color:var(--secondary);font-weight:600;font-size:13px}
+
+.presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.preset-btn{
+  background:var(--bg);border:1px solid #222236;color:var(--text);padding:8px 14px;border-radius:9px;
+  cursor:pointer;font-size:13px;font-weight:600;transition:.2s;
+}
+.preset-btn:hover{border-color:var(--accent);transform:translateY(-1px)}
+
+.toggle{display:flex;align-items:center;gap:10px;margin-top:12px;cursor:pointer;user-select:none;font-size:14px}
+.toggle input{appearance:none;width:44px;height:26px;background:var(--bg);border:1px solid #222236;border-radius:999px;position:relative;transition:.2s;cursor:pointer}
+.toggle input:checked{background:var(--accent);border-color:var(--accent)}
+.toggle input::after{content:'';position:absolute;width:20px;height:20px;background:var(--text);border-radius:50%;top:2px;left:2px;transition:.2s}
+.toggle input:checked::after{left:21px;background:#050507}
+
+.pro-list{display:flex;flex-direction:column;gap:10px;margin:16px 0}
+.pro-feature{
+  display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg);
+  border:1px solid var(--border);border-radius:12px;transition:.2s;font-size:14px;
+}
+.pro-feature.unlocked{border-color:rgba(34,211,238,.35);background:linear-gradient(180deg,rgba(34,211,238,.08),transparent)}
+.pro-feature .icon{font-size:18px;width:24px;text-align:center;filter:grayscale(1);opacity:.7}
+.pro-feature.unlocked .icon{filter:none;opacity:1;color:var(--secondary)}
+
+.status{display:inline-flex;align-items:center;padding:4px 10px;border-radius:8px;font-size:11px;font-weight:800;letter-spacing:.3px}
+.status.free{background:#1e293b;color:var(--muted);border:1px solid #2a3444}
+.status.pro{background:linear-gradient(90deg,var(--accent),var(--secondary));color:#050507}
+
+.code-box{display:flex;gap:8px;margin-top:16px}
+.btn-primary{
+  background:var(--accent);color:#050507;border:none;padding:11px 18px;border-radius:10px;
+  font-weight:800;cursor:pointer;transition:.2s;white-space:nowrap;
+}
+.btn-primary:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+.instructions{
+  margin-top:16px;padding:14px;background:var(--bg);border:1px dashed #222236;
+  border-radius:12px;font-size:13px;color:var(--muted);line-height:1.6;
+}
+.instructions b{color:var(--text)}
+
+.export-options{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
+.radio-card{
+  display:flex;align-items:center;gap:12px;padding:14px;background:var(--bg);
+  border:1px solid #222236;border-radius:12px;cursor:pointer;transition:.2s;
+}
+.radio-card:hover{border-color:#2a2a44}
+.radio-card.active{border-color:var(--accent);background:linear-gradient(180deg,rgba(124,58,237,.12),transparent)}
+.radio-card.locked{opacity:.55;cursor:not-allowed}
+.radio-card input{accent-color:var(--accent);width:18px;height:18px}
+.radio-card strong{font-size:14px}
+.radio-card span{font-size:12px;color:var(--muted)}
+
+.progress-wrap{margin-top:18px;display:none}
+.progress-bar{height:8px;background:var(--bg);border-radius:6px;overflow:hidden;border:1px solid #222236}
+.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--secondary));transition:width .2s}
+.progress-text{margin-top:8px;font-size:12px;color:var(--muted);text-align:center}
+
+footer{text-align:center;padding:24px;color:#64748b;font-size:12px;border-top:1px solid var(--border);margin-top:auto}
+
+.toast{
+  position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--surface);border:1px solid var(--border);padding:12px 18px;border-radius:12px;
+  box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:.3s;z-index:100;
+  font-size:14px;font-weight:600;max-width:90vw;text-align:center;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.error{border-color:var(--danger);box-shadow:0 0 0 1px rgba(239,68,68,.2),0 10px 30px rgba(0,0,0,.5)}
+
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:520px){.two-col{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo"><b>VazaCut</b> Pro</div>
+    <div class="badge">by GStudio App</div>
+  </header>
+
+  <div class="filebar">
+    <label for="videoInput" class="btn-file">Escolher vídeo</label>
+    <input type="file" id="videoInput" accept="video/*" hidden>
+    <span id="fileName">Nenhum vídeo selecionado</span>
+  </div>
+
+  <nav class="tabs">
+    <button data-tab="cortar" class="active">Cortar</button>
+    <button data-tab="legenda">Legenda</button>
+    <button data-tab="filtros">Filtros</button>
+    <button data-tab="pro">Pro</button>
+    <button data-tab="exportar">Exportar</button>
+  </nav>
+
+  <main>
+    <div class="preview-wrap" id="previewWrap">
+      <video id="preview" controls playsinline></video>
+      <div class="subtitle-overlay" id="subtitleOverlay"></div>
+      <div id="dropHint">Solte seu vídeo aqui<br>ou clique em "Escolher vídeo"</div>
+    </div>
+
+    <div class="panels">
+      <section id="tab-cortar" class="panel active">
+        <h3>Corte preciso</h3>
+        <div class="two-col">
+          <div class="input-group">
+            <label>Início (s)</label>
+            <input type="number" id="startTime" step="0.1" min="0" value="0">
+          </div>
+          <div class="input-group">
+            <label>Fim (s)</label>
+            <input type="number" id="endTime" step="0.1" min="0" value="0">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="preset-btn" id="markStart">Usar tempo atual → Início</button>
+          <button class="preset-btn" id="markEnd">Usar tempo atual → Fim</button>
+          <button class="preset-btn" id="resetCut">Resetar</button>
+        </div>
+      </section>
+
+      <section id="tab-legenda" class="panel">
+        <h3>Legenda SRT</h3>
+        <div class="input-group">
+          <label>Cole seu SRT</label>
+          <textarea id="srtInput" placeholder="1
+00:00:00,000 --> 00:00:03,000
+Olá, este é o VazaCut Pro
+
+2
+00:00:03,500 --> 00:00:06,000
+Legenda queimada no preview"></textarea>
+        </div>
+        <label class="toggle"><input type="checkbox" id="burnToggle"><span>Queimar legenda no preview</span></label>
+      </section>
+
+      <section id="tab-filtros" class="panel">
+        <h3>Filtros visuais</h3>
+        <div class="slider-row">
+          <label>Brilho</label>
+          <input type="range" id="brightness" min="0" max="200" value="100">
+          <span id="bVal">100%</span>
+        </div>
+        <div class="slider-row">
+          <label>Contraste</label>
+          <input type="range" id="contrast" min="0" max="200" value="100">
+          <span id="cVal">100%</span>
+        </div>
+        <div class="slider-row">
+          <label>Saturação</label>
+          <input type="range" id="saturation" min="0" max="200" value="100">
+          <span id="sVal">100%</span>
+        </div>
+        <div class="presets">
+          <button class="preset-btn" data-b="100" data-c="100" data-s="100">Normal</button>
+          <button class="preset-btn" data-b="90" data-c="120" data-s="110">Cinema</button>
+          <button class="preset-btn" data-b="110" data-c="110" data-s="140">Vivid</button>
+        </div>
+      </section>
+
+      <section id="tab-pro" class="panel">
+        <h3>Recursos Pro <span id="proStatus" class="status free">Grátis</span></h3>
+        <div class="pro-list">
+          <div class="pro-feature"><span class="icon">🔒</span> Export 4K</div>
+          <div class="pro-feature"><span class="icon">🔒</span> Legenda Automática (Whisper)</div>
+          <div class="pro-feature"><span class="icon">🔒</span> Removedor de Ruído</div>
+          <div class="pro-feature"><span class="icon">🔒</span> Removedor de Fundo</div>
+          <div class="pro-feature"><span class="icon">🔒</span> Lote (até 10 vídeos)</div>
+        </div>
+        <div class="code-box">
+          <input type="text" id="codeInput" placeholder="Código Vitalício" autocapitalize="characters" spellcheck="false">
+          <button class="btn-primary" id="activateBtn">Ativar</button>
+        </div>
+        <div class="instructions">
+          <strong>Como ativar:</strong><br>
+          1. Faça Pix para <b>gstudioapp900@gmail.com</b><br>
+          2. Envie comprovante para mesmo email<br>
+          3. Receba seu código
+        </div>
+      </section>
+
+      <section id="tab-exportar" class="panel">
+        <h3>Exportar vídeo</h3>
+        <div class="export-options">
+          <label class="radio-card active">
+            <input type="radio" name="res" value="1080" id="res1080" checked>
+            <div><strong>1080p Full HD</strong><br><span>Grátis • H.264 • até 60fps</span></div>
+          </label>
+          <label class="radio-card locked" id="card4k">
+            <input type="radio" name="res" value="4k" id="res4k" disabled>
+            <div><strong>4K Ultra HD</strong><br><span>PRO • H.265 • qualidade máxima</span></div>
+          </label>
+        </div>
+        <button class="btn-primary" id="exportBtn" style="width:100%;padding:14px;font-size:15px">Exportar MP4</button>
+        <div class="progress-wrap" id="progressWrap">
+          <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+          <div class="progress-text" id="progressText">Preparando...</div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>Contato: gstudioapp900@gmail.com | Projeto 100% local</footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const PRO_CODES = ["VAZA-GS-2026-001","VAZA-GS-2026-ABC"];
+const video = document.getElementById('preview');
+const videoInput = document.getElementById('videoInput');
+const fileName = document.getElementById('fileName');
+const dropHint = document.getElementById('dropHint');
+const previewWrap = document.getElementById('previewWrap');
+const subtitleOverlay = document.getElementById('subtitleOverlay');
+
+const startTime = document.getElementById('startTime');
+const endTime = document.getElementById('endTime');
+
+const brightness = document.getElementById('brightness');
+const contrast = document.getElementById('contrast');
+const saturation = document.getElementById('saturation');
+const bVal = document.getElementById('bVal');
+const cVal = document.getElementById('cVal');
+const sVal = document.getElementById('sVal');
+
+const srtInput = document.getElementById('srtInput');
+const burnToggle = document.getElementById('burnToggle');
+
+const proStatus = document.getElementById('proStatus');
+const codeInput = document.getElementById('codeInput');
+const activateBtn = document.getElementById('activateBtn');
+
+const res1080 = document.getElementById('res1080');
+const res4k = document.getElementById('res4k');
+const card4k = document.getElementById('card4k');
+const exportBtn = document.getElementById('exportBtn');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressText = document.getElementById('progressText');
+
+let subtitles = [];
+let isPro = localStorage.getItem('vazacut_pro') === 'true';
+
+// Tabs
+document.querySelectorAll('.tabs button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+// File load
+function loadFile(file){
+  if(!file || !file.type.startsWith('video/')){showToast('Selecione um vídeo válido',true);return;}
+  const url = URL.createObjectURL(file);
+  video.src = url;
+  fileName.textContent = file.name;
+  dropHint.style.display='none';
+  video.load();
+}
+videoInput.addEventListener('change',e=>loadFile(e.target.files[0]));
+previewWrap.addEventListener('dragover',e=>{e.preventDefault();previewWrap.style.borderColor='var(--accent)'});
+previewWrap.addEventListener('dragleave',()=>{previewWrap.style.borderColor='var(--border)'});
+previewWrap.addEventListener('drop',e=>{e.preventDefault();previewWrap.style.borderColor='var(--border)';loadFile(e.dataTransfer.files[0])});
+
+video.addEventListener('loadedmetadata',()=>{
+  endTime.value = video.duration.toFixed(1);
+  startTime.value = '0';
+  startTime.max = video.duration;
+  endTime.max = video.duration;
+});
+
+// Corte
+video.addEventListener('timeupdate',()=>{
+  const s = parseFloat(startTime.value)||0;
+  const e = parseFloat(endTime.value)||video.duration||0;
+  if(video.currentTime < s || video.currentTime > e+0.05){
+    if(video.currentTime > e && !video.paused){
+      video.currentTime = s;
+    }
+  }
+  // legendas
+  if(burnToggle.checked && subtitles.length){
+    const t = video.currentTime;
+    const sub = subtitles.find(x=>t>=x.start && t<=x.end);
+    if(sub){subtitleOverlay.textContent=sub.text;subtitleOverlay.style.display='block'}
+    else{subtitleOverlay.style.display='none'}
+  }
+});
+document.getElementById('markStart').onclick=()=>{if(video.duration)startTime.value=video.currentTime.toFixed(1)};
+document.getElementById('markEnd').onclick=()=>{if(video.duration)endTime.value=video.currentTime.toFixed(1)};
+document.getElementById('resetCut').onclick=()=>{startTime.value=0;endTime.value=video.duration?video.duration.toFixed(1):0};
+
+// Filtros
+function updateFilters(){
+  video.style.filter = `brightness(${brightness.value}%) contrast(${contrast.value}%) saturate(${saturation.value}%)`;
+  bVal.textContent = brightness.value+'%';
+  cVal.textContent = contrast.value+'%';
+  sVal.textContent = saturation.value+'%';
+}
+[brightness,contrast,saturation].forEach(s=>s.addEventListener('input',updateFilters));
+document.querySelectorAll('.preset-btn[data-b]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    brightness.value=btn.dataset.b;
+    contrast.value=btn.dataset.c;
+    saturation.value=btn.dataset.s;
+    updateFilters();
+  });
+});
+updateFilters();
+
+// Legendas
+function parseSRT(text){
+  const entries=[];
+  const blocks=text.trim().split(/\n\s*\n/);
+  for(const block of blocks){
+    const lines=block.split('\n');
+    if(lines.length>=2){
+      const m=lines[1].match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+      if(m){
+        const start=(+m[1])*3600+(+m[2])*60+(+m[3])+(+m[4])/1000;
+        const end=(+m[5])*3600+(+m[6])*60+(+m[7])+(+m[8])/1000;
+        const txt=lines.slice(2).join('\n');
+        entries.push({start,end,text:txt});
+      }
+    }
+  }
+  return entries;
+}
+srtInput.addEventListener('input',()=>{subtitles=parseSRT(srtInput.value)});
+burnToggle.addEventListener('change',()=>{subtitleOverlay.style.display=burnToggle.checked?'block':'none';if(!burnToggle.checked)subtitleOverlay.textContent=''});
+
+// Pro
+function updateProUI(){
+  proStatus.textContent = isPro ? 'PRO ATIVO' : 'Grátis';
+  proStatus.className = 'status ' + (isPro?'pro':'free');
+  document.querySelectorAll('.pro-feature').forEach(el=>{
+    const icon=el.querySelector('.icon');
+    if(isPro){el.classList.add('unlocked');icon.textContent='✓'}
+    else{el.classList.remove('unlocked');icon.textContent='🔒'}
+  });
+  if(isPro){
+    res4k.disabled=false;
+    card4k.classList.remove('locked');
+  }else{
+    res4k.disabled=true;
+    card4k.classList.add('locked');
+    if(res4k.checked)res1080.checked=true;
+    updateRadioCards();
+  }
+}
+activateBtn.onclick=()=>{
+  const code=codeInput.value.trim().toUpperCase();
+  if(PRO_CODES.includes(code)){
+    isPro=true;
+    localStorage.setItem('vazacut_pro','true');
+    updateProUI();
+    showToast('Código ativado! Bem-vindo ao PRO.');
+    codeInput.value='';
+  }else{
+    showToast('Código inválido',true);
+  }
+};
+updateProUI();
+
+// Export radios visual
+function updateRadioCards(){
+  document.querySelectorAll('.radio-card').forEach(c=>{
+    c.classList.toggle('active', c.querySelector('input').checked);
+  });
+}
+document.querySelectorAll('input[name="res"]').forEach(r=>r.addEventListener('change',updateRadioCards));
+updateRadioCards();
+
+// Export simulation
+exportBtn.onclick=()=>{
+  if(!video.src){showToast('Escolha um vídeo primeiro',true);return;}
+  const res=document.querySelector('input[name="res"]:checked').value;
+  if(res==='4k' && !isPro){showToast('4K é recurso PRO. Ative na aba Pro.',true);document.querySelector('[data-tab="pro"]').click();return;}
+  
+  exportBtn.disabled=true;
+  progressWrap.style.display='block';
+  progressFill.style.width='0%';
+  
+  const s=parseFloat(startTime.value)||0;
+  const e=parseFloat(endTime.value)||video.duration||0;
+  const hasSub=burnToggle.checked && subtitles.length>0;
+  const filt = `b${brightness.value} c${contrast.value} s${saturation.value}`;
+  
+  let p=0;
+  const timer=setInterval(()=>{
+    p+=Math.random()*14;
+    if(p>=100){p=100;clearInterval(timer);
+      progressFill.style.width='100%';
+      progressText.textContent=`Concluído! • ${res.toUpperCase()} • Corte ${s.toFixed(1)}s-${e.toFixed(1)}s`;
+      setTimeout(()=>{
+        exportBtn.disabled=false;
+        progressWrap.style.display='none';
+        showToast('Exportação simulada concluída! (render real 100% local em breve)');
+      },900);
+    }else{
+      progressFill.style.width=p+'%';
+      progressText.textContent=`Renderizando... ${Math.floor(p)}% • ${res.toUpperCase()} • ${hasSub?'legenda':'sem legenda'} • ${filt}`;
+    }
+  },160);
+};
+
+// Toast
+const toast=document.getElementById('toast');
+let toastTimer;
+function showToast(msg,isErr){
+  toast.textContent=msg;
+  toast.className='toast show'+(isErr?' error':'');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>toast.classList.remove('show'),3000);
+}
+
+// Demo subtitle
+srtInput.dispatchEvent(new Event('input'));
+</script>
+</body>
+</html>
